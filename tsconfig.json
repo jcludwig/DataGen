@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "noImplicitAny": true,
+        "removeComments": false,
+        "preserveConstEnums": true,
+        "out": "build/tsc.js",
+        "sourceMap": true
+    },
+    "files": [
+        "typings/tsd.d.ts",
+        "generateData.ts"
+    ]
+}
