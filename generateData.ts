@@ -53,6 +53,13 @@ module GenerateData {
         return (Math.random() * range) + lowerBound;
     }
     
+    function formattedRandomNumber(upperBound: number, lowerBound: number, precision: number): string {
+        let range = upperBound - lowerBound;
+        let val = randomNumber(range, lowerBound);
+        val = roundToPrecision(val, precision);
+        return val.toString();
+    }
+    
     function getMeasureName(id: number): string {
         return "measure" + id;
     }
@@ -75,58 +82,27 @@ module GenerateData {
         return row.join(',');
     }
     
-    interface CategoryColumn {
-        length: number;
-        getValue: (i: number) => string;
-        name: string;
-    }
-    
-    interface MeasureColumn {
-        getValue: (categoryValues: string[]) => string;
-        name: string;
-    }
-    
-    export function generateData() {
-        let categoryColumns: CategoryColumn[] = [
-            {
-                length: 20,
-                getValue: (i: number) => "cat1_" + i,
-                name: "cat1",
-            }, {
-                length: 10,
-                getValue: (i: number) => "cat2_" + i,
-                name: "cat2",
-            },  {
-                length: 5,
-                getValue: (i: number) => "cat3_" + i,
-                name: "cat3",
-            }
-        ];
-        
-        let measureOptions: MeasureValueOptions = {
-            sparsity: 0.10,
-            isScalar: false,
-            lowerBound: -100,
-            upperBound: 100,
-            precision: 0.001,
-        };
-        
-        let measureColumns: MeasureColumn[] = [
-            {
-                getValue: (categoryValues: string[]) => {
-                    let range = measureOptions.upperBound - measureOptions.lowerBound;
-                    let val = randomNumber(range, measureOptions.lowerBound);
-                    val = roundToPrecision(val, measureOptions.precision);
-                    return val.toString();
-                },
-                name: "measure1",
-            }
-        ];
-        
+    function createAllCombinations(categoryColumns: CategoryColumn[], measureColumns: MeasureColumn[], path: string) {
         let rowCount = _.reduce(categoryColumns, (total, c) => total * c.length, 1);
         console.log("generating " + rowCount + " rows...");
         
-        let rows: string[][] = [];
+        let rows: string[] = [];
+        
+        // add headers
+        let headers: string[] = [];
+        for (let c of categoryColumns)
+            headers.push(c.name);
+            
+        for (let c of measureColumns)
+            headers.push(c.name);
+
+        rows.unshift(toRowStr(headers));
+        
+        try {
+            fs.unlinkSync(path);
+        }
+        catch (e) { }
+        
         let valueIndices: number[] = new Array(categoryColumns.length);
         _.fill(valueIndices, 0);
         for (let r = 0; r < rowCount; r++) {
@@ -136,12 +112,12 @@ module GenerateData {
             // categories
             for (let c = 0; c < categoryColumns.length; c++) {
                 let i = valueIndices[c];
-                row[c] = categoryColumns[c].getValue(i);
+                row[c] = categoryColumns[c].values[i];
             }
             
             // measures
             for (let c = 0; c < measureColumns.length; c++) {
-                row[categoryColumns.length + c] = measureColumns[c].getValue(row.slice(0, categoryColumns.length));
+                row[categoryColumns.length + c] = measureColumns[c].getValue();
             }
             
             // increment indices
@@ -153,32 +129,166 @@ module GenerateData {
                     valueIndices[i] = 0;
             }
             
-            rows.push(row);
+            rows.push(toRowStr(row));
+            
+            if (r % 10000 === 0) {
+                console.log(r + "/" + rowCount);
+                fs.appendFileSync(path, rows.join('\r\n') + '\r\n');
+                rows = [];
+            }
         }
         
-        // add sparsity
-        //addSparsity(table, measureOptions.sparsity);
+        if (rows.length > 0) {
+            fs.appendFileSync(path, rows.join('\r\n') + '\r\n');
+        }
+    }
+    
+    function createRowsWithBlanks(primary: CategoryColumn, secondaries: CategoryColumn[], measures: MeasureColumn[], path: string) {
+        //let secondaryLength = _.max(_.map(secondaries, (s) => s.length));
+        let rowCount = primary.length * _.sum(_.map(secondaries, (s) => s.length));
+        let rows: string[] = [];
+        
+        let categoryColumns = [primary].concat(secondaries);
+        
+        let primaryIndex = 0;
+        let secondaryIndex = 0;
+        let secondaryColumnIndex = 0;
+        let secondaryColumn = secondaries[secondaryColumnIndex];
+        
+        console.log("generating " + rowCount + " rows...");
         
         // add headers
         let headers: string[] = [];
         for (let c of categoryColumns)
             headers.push(c.name);
             
-        for (let c of measureColumns)
+        for (let c of measures)
             headers.push(c.name);
 
-        rows.unshift(headers);
+        rows.unshift(toRowStr(headers));
         
-        // convert to strings & add headers
-        let lines: string[] = [];
-        for (let r = 0; r < rows.length; r++) {
-          let row: string[] = rows[r];
-          lines.push(toRowStr(row));
+        for (let r = 0; r < rowCount; r++) {
+            let row = new Array(categoryColumns.length + measures.length);
+            
+            // primary
+            row[0] = primary.values[primaryIndex];
+            
+            // secondaries
+            // for (let c = 0; c < secondaries.length; c++) {
+            //     let value: string;
+            //     if (secondaryIndex === c) {
+            //         let secondary = secondaries[c];
+            //         value = secondary.values[secondaryIndex];
+            //     }
+            //     else {
+            //         value = "";
+            //     }
+            //     row[c + 1] = value;
+            // }
+            row[secondaryColumnIndex + 1] = secondaryColumn.values[secondaryIndex];
+            
+            // measures
+            for (let c = 0; c < measures.length; c++) {
+                row[categoryColumns.length + c] = measures[c].getValue();
+            }
+            
+            rows.push(toRowStr(row));
+            
+            if (r % 10000 === 0) {
+                console.log(r + "/" + rowCount);
+                fs.appendFileSync(path, rows.join('\r\n') + '\r\n');
+                rows = [];
+            }
+            
+            // increment indices
+            secondaryIndex++;
+            if (secondaryIndex >= secondaryColumn.length) {
+                secondaryIndex = 0;
+                primaryIndex++;
+            }
+            
+            if (primaryIndex >= primary.length) {
+                primaryIndex = 0;
+                secondaryColumnIndex++;
+                secondaryColumn = secondaries[secondaryColumnIndex];
+            }
         }
         
-        let content = lines.join('\r\n');
+        if (rows.length > 0) {
+            fs.appendFileSync(path, rows.join('\r\n') + '\r\n');
+        }
+    }
+    
+    interface CategoryColumn {
+        length: number;
+        values: string[];
+        name: string;
+    }
+    
+    interface MeasureColumn {
+        getValue: () => string;
+        name: string;
+    }
+    
+    export function generateData() {
+        let path = 'data.csv';
         
-        fs.writeFile("data.csv", content);
+        let primaryColumn: CategoryColumn = {
+            length: 20,
+            values: _.map(_.range(20), (i: number) => "column1_" + i),
+            name: "column1",
+        };
+        
+        let secondaryColumns: CategoryColumn[] = [];
+        for (let n = 2; n < 5; n++) {
+            var name = "column" + n;
+            secondaryColumns.push({
+                length: 100,
+                values: _.map(_.range(100), (i: number) => name + "_" + i),
+                name: name,
+            });
+        }
+        
+        let measureOptions: MeasureValueOptions = {
+            sparsity: 0.10,
+            isScalar: false,
+            lowerBound: -100,
+            upperBound: 100,
+            precision: 0.001,
+        };
+        
+        let measureColumns: MeasureColumn[] = [
+            {
+                getValue: () => formattedRandomNumber(measureOptions.upperBound, measureOptions.lowerBound, measureOptions.precision),
+                name: "measure1",
+            }
+        ];
+        
+        try {
+            fs.unlinkSync(path);
+        }
+        catch (e) { }
+        
+        for (let i = 0; i < secondaryColumns.length; i++) {
+            let p = 'data' + i + '.csv';
+            createAllCombinations([primaryColumn, secondaryColumns[i]], measureColumns, p);
+        }
+        
+        //createAllCombinations([primaryColumn].concat(secondaryColumns), measureColumns, path);
+        
+        // add sparsity
+        //addSparsity(table, measureOptions.sparsity);
+        
+        // convert to strings & add headers
+        // let lines: string[] = [];
+        // for (let r = 0; r < rows.length; r++) {
+        //   let row: string[] = rows[r];
+        //   lines.push(toRowStr(row));
+        // }
+        // 
+        // let content = lines.join('\r\n');
+        // 
+        // fs.writeFile("data.csv", content);
     }
 }
 
