@@ -234,20 +234,31 @@ module GenerateData {
         let path = 'data.csv';
         
         let primaryColumn: CategoryColumn = {
-            length: 20,
-            values: _.map(_.range(20), (i: number) => "column1_" + i),
+            length: 50,
+            values: _.map(_.range(50), (i: number) => "category" + i),
             name: "column1",
         };
         
-        let secondaryColumns: CategoryColumn[] = [];
-        for (let n = 2; n < 5; n++) {
-            var name = "column" + n;
-            secondaryColumns.push({
+        let secondaryColumns: CategoryColumn[] = [
+            {
                 length: 100,
-                values: _.map(_.range(100), (i: number) => name + "_" + i),
-                name: name,
-            });
-        }
+                values: _.map(_.range(100), (i: number) => "column2_" + i),
+                name: "column2",
+            }, {
+                length: 20,
+                values: _.map(_.range(20), (i: number) => i.toString()),
+                name: "column3",
+            }
+        ];
+        // let secondaryColumns: CategoryColumn[] = [];
+        // for (let n = 2; n < 12; n++) {
+        //     var name = "column" + n;
+        //     secondaryColumns.push({
+        //         length: 100,
+        //         values: _.map(_.range(100), (i: number) => name + "_" + i),
+        //         name: name,
+        //     });
+        // }
         
         let measureOptions: MeasureValueOptions = {
             sparsity: 0.10,
@@ -269,12 +280,12 @@ module GenerateData {
         }
         catch (e) { }
         
-        for (let i = 0; i < secondaryColumns.length; i++) {
-            let p = 'data' + i + '.csv';
-            createAllCombinations([primaryColumn, secondaryColumns[i]], measureColumns, p);
-        }
+        // for (let i = 0; i < secondaryColumns.length; i++) {
+        //     let p = 'data' + i + '.csv';
+        //     createAllCombinations([primaryColumn, secondaryColumns[i]], measureColumns, p);
+        // }
         
-        //createAllCombinations([primaryColumn].concat(secondaryColumns), measureColumns, path);
+        createAllCombinations([primaryColumn].concat(secondaryColumns), measureColumns, path);
         
         // add sparsity
         //addSparsity(table, measureOptions.sparsity);
