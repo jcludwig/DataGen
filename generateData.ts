@@ -7,7 +7,7 @@ module GenerateData {
     let dateStep = 1000 * 60 * 60 * 24;  // 1 day
     
     interface MeasureValueOptions {
-        sparsity: number;
+        density: number;
         lowerBound: number;
         upperBound: number;
         precision: number;
@@ -109,15 +109,30 @@ module GenerateData {
             // fill in row values
             let row: string[] = new Array(categoryColumns.length + measureColumns.length);
             
-            // categories
-            for (let c = 0; c < categoryColumns.length; c++) {
-                let i = valueIndices[c];
-                row[c] = categoryColumns[c].values[i];
+            // measures
+            let addRow: boolean = false;
+            for (let c = 0; c < measureColumns.length; c++) {
+                let r = Math.random();
+                if (r <= measureColumns[c].density) {
+                    row[categoryColumns.length + c] = measureColumns[c].getValue();
+                    addRow = true;
+                }
             }
             
-            // measures
-            for (let c = 0; c < measureColumns.length; c++) {
-                row[categoryColumns.length + c] = measureColumns[c].getValue();
+            if (addRow) {
+                // categories
+                for (let c = 0; c < categoryColumns.length; c++) {
+                    let i = valueIndices[c];
+                    row[c] = categoryColumns[c].getValue(i);
+                }
+                
+                rows.push(toRowStr(row));
+                
+                if (r % 10000 === 0) {
+                    console.log(r + "/" + rowCount);
+                    fs.appendFileSync(path, rows.join('\r\n') + '\r\n');
+                    rows = [];
+                }
             }
             
             // increment indices
@@ -127,14 +142,6 @@ module GenerateData {
                     break;
                 else
                     valueIndices[i] = 0;
-            }
-            
-            rows.push(toRowStr(row));
-            
-            if (r % 10000 === 0) {
-                console.log(r + "/" + rowCount);
-                fs.appendFileSync(path, rows.join('\r\n') + '\r\n');
-                rows = [];
             }
         }
         
@@ -171,7 +178,7 @@ module GenerateData {
             let row = new Array(categoryColumns.length + measures.length);
             
             // primary
-            row[0] = primary.values[primaryIndex];
+            row[0] = primary.getValue(primaryIndex);
             
             // secondaries
             // for (let c = 0; c < secondaries.length; c++) {
@@ -185,11 +192,13 @@ module GenerateData {
             //     }
             //     row[c + 1] = value;
             // }
-            row[secondaryColumnIndex + 1] = secondaryColumn.values[secondaryIndex];
+            row[secondaryColumnIndex + 1] = secondaryColumn.getValue(secondaryIndex);
             
             // measures
             for (let c = 0; c < measures.length; c++) {
-                row[categoryColumns.length + c] = measures[c].getValue();
+                let r = Math.random();
+                if (r <= measures[c].density)
+                    row[categoryColumns.length + c] = measures[c].getValue();
             }
             
             rows.push(toRowStr(row));
@@ -221,13 +230,14 @@ module GenerateData {
     
     interface CategoryColumn {
         length: number;
-        values: string[];
+        getValue: (i: number) => string;
         name: string;
     }
     
     interface MeasureColumn {
         getValue: () => string;
         name: string;
+        density: number;
     }
     
     export function generateData() {
@@ -235,20 +245,20 @@ module GenerateData {
         
         let primaryColumn: CategoryColumn = {
             length: 50,
-            values: _.map(_.range(50), (i: number) => "category" + i),
+            getValue: (i: number) => "category" + i,
             name: "column1",
         };
         
         let secondaryColumns: CategoryColumn[] = [
             {
                 length: 100,
-                values: _.map(_.range(100), (i: number) => "column2_" + i),
+                getValue: (i: number) => "column2_" + i,
                 name: "column2",
-            }, {
+            } /*, {
                 length: 20,
-                values: _.map(_.range(20), (i: number) => i.toString()),
+                getValue: (i: number) => i.toString(),
                 name: "column3",
-            }
+            } */
         ];
         // let secondaryColumns: CategoryColumn[] = [];
         // for (let n = 2; n < 12; n++) {
@@ -261,18 +271,27 @@ module GenerateData {
         // }
         
         let measureOptions: MeasureValueOptions = {
-            sparsity: 0.10,
+            density: 0.90,
             isScalar: false,
             lowerBound: -100,
             upperBound: 100,
-            precision: 0.001,
+            precision: 0.0001,
         };
         
         let measureColumns: MeasureColumn[] = [
             {
                 getValue: () => formattedRandomNumber(measureOptions.upperBound, measureOptions.lowerBound, measureOptions.precision),
-                name: "measure1",
-            }
+                name: "x",
+                density: measureOptions.density,
+            }, /*{
+                getValue: () => formattedRandomNumber(measureOptions.upperBound, measureOptions.lowerBound, measureOptions.precision),
+                name: "y",
+                density: measureOptions.density,
+            }, {
+                getValue: () => formattedRandomNumber(measureOptions.upperBound, measureOptions.lowerBound, measureOptions.precision),
+                name: "size",
+                density: measureOptions.density,
+            }*/
         ];
         
         try {
